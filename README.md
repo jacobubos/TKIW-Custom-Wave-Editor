@@ -4,6 +4,12 @@ An unofficial in-game wave editor for **The King is Watching**. Design campaign 
 
 Tested with game version **1.3.2** on Windows.
 
+## Screenshots
+
+![Wave Editor button on the title screen](docs/screenshots/title-screen.png)
+
+![Custom Wave Editor interface](docs/screenshots/wave-editor.png)
+
 ## One-file installation
 
 1. Download `TKIW-Custom-Wave-Editor-Setup.exe` from the latest GitHub release.
@@ -16,6 +22,8 @@ The installer locates the Steam game automatically. If it cannot, it asks for th
 The installer does not modify save files or wave CSV files. The editor creates backups before it writes wave files.
 
 > The setup executable is not code-signed, so Windows SmartScreen may show an unknown-publisher warning. The complete installer and mod source are in this repository, and release hashes are published beside every build.
+
+Every release also provides `TKIW-Custom-Wave-Editor-Source.zip` for people who prefer to inspect or build the Visual Studio source project instead of running the installer.
 
 ## Using the editor
 
@@ -61,7 +69,7 @@ Run:
 .\build-release.ps1
 ```
 
-The build downloads the pinned official Aurie and YYToolkit release binaries, verifies their SHA-256 hashes, compiles the x64 mod, and creates a single setup executable under `dist`.
+The build downloads the pinned official Aurie and YYToolkit release binaries, verifies their SHA-256 hashes, compiles the x64 mod, and creates both the setup executable and source-project ZIP under `dist`.
 
 ## Dependencies and attribution
 
@@ -75,4 +83,3 @@ The King is Watching, its names, and the small enemy images used for identificat
 ## License
 
 Mod and installer source: **GNU Affero General Public License v3.0**, due to the Aurie/YYToolkit integration. See [LICENSE](LICENSE).
-
