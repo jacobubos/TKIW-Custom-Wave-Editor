@@ -374,6 +374,7 @@ namespace
     HGDIOBJ g_EditorBackPreviousBitmap = nullptr;
     int g_EditorBackWidth = 0;
     int g_EditorBackHeight = 0;
+    double g_NativePaintScale = 1.0;
 
     class ScopedPerMonitorDpi
     {
@@ -2850,8 +2851,10 @@ namespace
     RECT NativeRect(const Rect& Bounds)
     {
         return {
-            static_cast<LONG>(Bounds.X), static_cast<LONG>(Bounds.Y),
-            static_cast<LONG>(Bounds.X + Bounds.Width), static_cast<LONG>(Bounds.Y + Bounds.Height)
+            static_cast<LONG>(std::lround(Bounds.X * g_NativePaintScale)),
+            static_cast<LONG>(std::lround(Bounds.Y * g_NativePaintScale)),
+            static_cast<LONG>(std::lround((Bounds.X + Bounds.Width) * g_NativePaintScale)),
+            static_cast<LONG>(std::lround((Bounds.Y + Bounds.Height) * g_NativePaintScale))
         };
     }
 
@@ -2917,7 +2920,8 @@ namespace
         if (WideText.empty())
             return;
 
-        const HFONT Font = CreateFontW(-FontHeight, 0, 0, 0, Bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+        const HFONT Font = CreateFontW(-static_cast<int>(std::lround(FontHeight * g_NativePaintScale)), 0, 0, 0,
+            Bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         const HGDIOBJ PreviousFont = SelectObject(DeviceContext, Font);
@@ -3108,8 +3112,11 @@ namespace
                 Gdiplus::Graphics Canvas(DeviceContext);
                 Canvas.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
                 Canvas.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-                Canvas.DrawImage(Icon, static_cast<INT>(Bounds.X), static_cast<INT>(Bounds.Y),
-                    static_cast<INT>(Bounds.Width), static_cast<INT>(Bounds.Height));
+                Canvas.DrawImage(Icon,
+                    static_cast<INT>(std::lround(Bounds.X * g_NativePaintScale)),
+                    static_cast<INT>(std::lround(Bounds.Y * g_NativePaintScale)),
+                    static_cast<INT>(std::lround(Bounds.Width * g_NativePaintScale)),
+                    static_cast<INT>(std::lround(Bounds.Height * g_NativePaintScale)));
                 return;
             }
         }
@@ -3140,8 +3147,11 @@ namespace
                 Gdiplus::Graphics Canvas(DeviceContext);
                 Canvas.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
                 Canvas.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-                Canvas.DrawImage(Icon, static_cast<INT>(Bounds.X), static_cast<INT>(Bounds.Y),
-                    static_cast<INT>(Bounds.Width), static_cast<INT>(Bounds.Height));
+                Canvas.DrawImage(Icon,
+                    static_cast<INT>(std::lround(Bounds.X * g_NativePaintScale)),
+                    static_cast<INT>(std::lround(Bounds.Y * g_NativePaintScale)),
+                    static_cast<INT>(std::lround(Bounds.Width * g_NativePaintScale)),
+                    static_cast<INT>(std::lround(Bounds.Height * g_NativePaintScale)));
                 return;
             }
         }
@@ -3195,16 +3205,23 @@ namespace
         const Rect& Panel = Layout.Panel;
 
         const double HeaderY = Panel.Y + 16.0;
-        AddNativeButton(Layout.Buttons, Panel.X + Panel.Width - 40.0, HeaderY, 24.0, 28.0,
-            NativeActionType::Close, "X", true);
-        AddNativeButton(Layout.Buttons, Panel.X + Panel.Width - 142.0, HeaderY, 92.0, 28.0,
-            NativeActionType::Save, "SAVE", false, true);
-        AddNativeButton(Layout.Buttons, Panel.X + Panel.Width - 300.0, HeaderY, 148.0, 28.0,
-            NativeActionType::Restore, "RESTORE DEFAULTS", true);
-        AddNativeButton(Layout.Buttons, Panel.X + Panel.Width - 438.0, HeaderY, 128.0, 28.0,
-            NativeActionType::PasteChallenge, "PASTE CHALLENGE");
-        AddNativeButton(Layout.Buttons, Panel.X + Panel.Width - 576.0, HeaderY, 128.0, 28.0,
-            NativeActionType::CopyChallenge, "COPY CHALLENGE");
+        // Lay the toolbar out from the right edge with widths that fit the
+        // complete labels at the button font. The old 128 px challenge
+        // buttons clipped at common 1080p/125% configurations.
+        constexpr double ToolbarGap = 10.0;
+        double ToolbarRight = Panel.X + Panel.Width - 16.0;
+        const auto AddToolbarButton = [&](const double Width, const NativeActionType Action,
+            const char* Label, const bool Danger = false, const bool Accent = false)
+        {
+            ToolbarRight -= Width;
+            AddNativeButton(Layout.Buttons, ToolbarRight, HeaderY, Width, 28.0, Action, Label, Danger, Accent);
+            ToolbarRight -= ToolbarGap;
+        };
+        AddToolbarButton(24.0, NativeActionType::Close, "X", true);
+        AddToolbarButton(92.0, NativeActionType::Save, "SAVE", false, true);
+        AddToolbarButton(168.0, NativeActionType::Restore, "RESTORE DEFAULTS", true);
+        AddToolbarButton(176.0, NativeActionType::PasteChallenge, "PASTE CHALLENGE");
+        AddToolbarButton(176.0, NativeActionType::CopyChallenge, "COPY CHALLENGE");
         AddNativeButton(Layout.Buttons, Panel.X + 18.0, HeaderY + 40.0, 30.0, 26.0,
             NativeActionType::BiomePrevious, "<");
         AddNativeButton(Layout.Buttons, Panel.X + 217.0, HeaderY + 40.0, 30.0, 26.0,
@@ -3238,7 +3255,7 @@ namespace
         AddGroup(2, 1, NativeActionType::PaletteTierDarkRealm, "DARK", kPaletteTierDarkRealm);
         AddGroup(0, 2, NativeActionType::PaletteTierBoss, "BOSSES", kPaletteTierBoss);
         AddGroup(1, 2, NativeActionType::PaletteTierEndless, "ENDLESS", kPaletteTierEndless);
-        AddGroup(2, 2, NativeActionType::PaletteTierUnreleased, "UNREL", kPaletteTierUnreleased);
+        AddGroup(2, 2, NativeActionType::PaletteTierUnreleased, "UNRELEASED", kPaletteTierUnreleased);
         const double StrengthWidth = (Layout.Palette.Width - 16.0) / 5.0;
         const auto AddStrength = [&](const int Column, const NativeActionType Action, const char* Label, const int Strength)
         {
@@ -3254,9 +3271,9 @@ namespace
             NativeActionType::PalettePagePrevious, "<");
         AddNativeButton(Layout.Buttons, Layout.Palette.X + Layout.Palette.Width - 29.0, Layout.Palette.Y + 132.0, 29.0, 25.0,
             NativeActionType::PalettePageNext, ">");
-        AddNativeButton(Layout.Buttons, Layout.Timeline.X, Layout.Timeline.Y + 28.0, 29.0, 25.0,
+        AddNativeButton(Layout.Buttons, Layout.Timeline.X, Layout.Timeline.Y + 1.0, 29.0, 25.0,
             NativeActionType::WavePagePrevious, "<");
-        AddNativeButton(Layout.Buttons, Layout.Timeline.X + Layout.Timeline.Width - 29.0, Layout.Timeline.Y + 28.0, 29.0, 25.0,
+        AddNativeButton(Layout.Buttons, Layout.Timeline.X + Layout.Timeline.Width - 29.0, Layout.Timeline.Y + 1.0, 29.0, 25.0,
             NativeActionType::WavePageNext, ">");
 
         BiomeData& Data = CurrentBiome();
@@ -3268,7 +3285,9 @@ namespace
             (Layout.Palette.Width >= 520.0 ? 4 : (Layout.Palette.Width >= 360.0 ? 3 : 2));
         const double TileGap = 6.0;
         const double TileWidth = (Layout.Palette.Width - (PaletteColumns - 1) * TileGap) / PaletteColumns;
-        const double TileHeight = (std::clamp)(TileWidth * 0.58, 46.0, 68.0);
+        // Three compact stat rows need enough vertical room for the name plus
+        // HP, raw damage, DPS, attack/cast speed, and optional healing.
+        const double TileHeight = (std::clamp)(TileWidth * 0.68, 78.0, 92.0);
         const int PaletteRows = (std::max)(1, static_cast<int>((Layout.Palette.Height - 172.0) / (TileHeight + TileGap)));
         Layout.PalettePageSize = PaletteColumns * PaletteRows;
         const int PalettePageCount = (std::max)(1, static_cast<int>((PaletteUnits.size() + Layout.PalettePageSize - 1) / Layout.PalettePageSize));
@@ -3295,7 +3314,9 @@ namespace
         const int WavePage = (std::clamp)(g_WavePage, 0, WavePageCount - 1);
         Layout.WaveStart = WavePage * Layout.WaveColumns;
         const double CardWidth = (Layout.Timeline.Width - 2.0 * TimelinePadding - (Layout.WaveColumns - 1) * TimelineGap) / Layout.WaveColumns;
-        const double CardsY = Layout.Timeline.Y + 64.0;
+        // Keep a dedicated wave-name row and week-control row. Previously the
+        // 17 px week buttons occupied the bottom of the 27 px wave heading.
+        const double CardsY = Layout.Timeline.Y + 78.0;
         const double CardsBottom = Layout.Timeline.Y + Layout.Timeline.Height - TimelinePadding;
         const double CardAreaHeight = (std::max)(90.0, CardsBottom - CardsY);
 
@@ -3314,12 +3335,12 @@ namespace
                 static_cast<double>(Difficulties.size());
             if (Data.WaveNumbers[static_cast<size_t>(WaveIndex)] != -1)
             {
-                AddNativeButton(Layout.Buttons, CardX + 4.0, Layout.Timeline.Y + 47.0, 18.0, 17.0,
+                AddNativeButton(Layout.Buttons, CardX + 4.0, Layout.Timeline.Y + 55.0, 20.0, 19.0,
                     NativeActionType::WeekDecrease, "-", false, false, WaveIndex);
-                AddNativeButton(Layout.Buttons, CardX + CardWidth - 22.0, Layout.Timeline.Y + 47.0, 18.0, 17.0,
+                AddNativeButton(Layout.Buttons, CardX + CardWidth - 24.0, Layout.Timeline.Y + 55.0, 20.0, 19.0,
                     NativeActionType::WeekIncrease, "+", false, true, WaveIndex);
                 Layout.WeekFields.push_back({
-                    { CardX + 24.0, Layout.Timeline.Y + 47.0, (std::max)(20.0, CardWidth - 48.0), 17.0 }, WaveIndex });
+                    { CardX + 28.0, Layout.Timeline.Y + 55.0, (std::max)(24.0, CardWidth - 56.0), 19.0 }, WaveIndex });
             }
             for (size_t DifficultyIndex = 0; DifficultyIndex < Difficulties.size(); ++DifficultyIndex)
             {
@@ -3383,24 +3404,33 @@ namespace
         RECT Bounds{};
         if (!GetClientRect(Window, &Bounds))
             return Metrics;
-        // Native GDI paints in this popup's own client-pixel coordinates.
-        // Do not convert them through the game's DPI context: doing that is
-        // what caused the editor to occupy only the upper-left 80% at 125%.
-        Metrics.Scale = 1.0;
-        Metrics.Width = static_cast<double>((std::max)(1L, Bounds.right - Bounds.left));
-        Metrics.Height = static_cast<double>((std::max)(1L, Bounds.bottom - Bounds.top));
+        const double PixelWidth = static_cast<double>((std::max)(1L, Bounds.right - Bounds.left));
+        const double PixelHeight = static_cast<double>((std::max)(1L, Bounds.bottom - Bounds.top));
+        const double DpiScale = static_cast<double>((std::max)(96U, GetDpiForWindow(Window))) / 96.0;
+        const double ResolutionScale = (std::min)(PixelWidth / 1920.0, PixelHeight / 1080.0);
+        const double DesiredScale = (std::max)(DpiScale, ResolutionScale);
+        // Never scale so far that the editor has too little logical room for
+        // its toolbar and timeline. This matters on 1080p displays using
+        // 150-200% Windows scaling, while still giving 1440p/4K readable UI.
+        const double CanvasCap = (std::min)(PixelWidth / 1100.0, PixelHeight / 650.0);
+        Metrics.Scale = (std::clamp)((std::min)(DesiredScale, CanvasCap), 0.75, 2.0);
+        Metrics.Width = PixelWidth / Metrics.Scale;
+        Metrics.Height = PixelHeight / Metrics.Scale;
         Metrics.Valid = true;
         return Metrics;
     }
 
     POINT NativeMousePosition(HWND Window, const LPARAM MessagePosition)
     {
-        // Mouse messages already carry client coordinates in this popup's own
-        // DPI space, including while it owns mouse capture. Keeping the
-        // original event position also avoids a queued button-up being
-        // evaluated against a later cursor position.
-        static_cast<void>(Window);
-        return { GET_X_LPARAM(MessagePosition), GET_Y_LPARAM(MessagePosition) };
+        // Layout/hit testing uses logical coordinates; pointer messages arrive
+        // in physical client pixels. Keep the event's original position while
+        // applying the same scale used by painting.
+        const GuiMetrics Metrics = NativeMetrics(Window);
+        const double Scale = Metrics.Valid ? Metrics.Scale : 1.0;
+        return {
+            static_cast<LONG>(std::lround(GET_X_LPARAM(MessagePosition) / Scale)),
+            static_cast<LONG>(std::lround(GET_Y_LPARAM(MessagePosition) / Scale))
+        };
     }
 
     void PaintNativeLauncher(HDC DeviceContext, HWND Window)
@@ -3408,6 +3438,7 @@ namespace
         const GuiMetrics Metrics = NativeMetrics(Window);
         if (!Metrics.Valid)
             return;
+        g_NativePaintScale = Metrics.Scale;
         // Match the title screen's brown, gold-trimmed menu buttons.  The
         // slight layered border keeps the launcher readable over the bright
         // main-menu artwork without looking like a detached debug window.
@@ -3489,12 +3520,13 @@ namespace
         // Draw the complete editor off-screen, then present it in one blit.
         // During a drag this avoids exposing a cleared frame between the
         // background fill and the palette/icon rendering.
-        const int BufferWidth = (std::max)(1, static_cast<int>(Metrics.Width));
-        const int BufferHeight = (std::max)(1, static_cast<int>(Metrics.Height));
+        const int BufferWidth = (std::max)(1, static_cast<int>(std::lround(Metrics.Width * Metrics.Scale)));
+        const int BufferHeight = (std::max)(1, static_cast<int>(std::lround(Metrics.Height * Metrics.Scale)));
         const HDC ScreenContext = DeviceContext;
         if (!EnsureEditorBackBuffer(ScreenContext, BufferWidth, BufferHeight))
             return;
         DeviceContext = g_EditorBackBuffer;
+        g_NativePaintScale = Metrics.Scale;
 
         NativeFill(DeviceContext, { 0, 0, Metrics.Width, Metrics.Height }, kColorBackground);
         const NativeLayout Layout = BuildNativeLayout(Metrics);
@@ -3539,7 +3571,7 @@ namespace
                 NativeFill(DeviceContext, Tile.Bounds, UnitTileColor(Tile.UnitId));
                 NativeFrame(DeviceContext, Tile.Bounds, kColorWhite);
                 const EnemyStats* Stats = StatsForUnit(Tile.UnitId);
-                const double StatRowHeight = 34.0;
+                const double StatRowHeight = 47.0;
                 const double IconSize = (std::clamp)(Tile.Bounds.Height - StatRowHeight - 8.0, 22.0, 34.0);
                 NativeUnitIcon(DeviceContext, { Tile.Bounds.X + 4.0, Tile.Bounds.Y + 4.0,
                     IconSize, IconSize }, Tile.UnitId);
@@ -3554,10 +3586,10 @@ namespace
                         Tile.Bounds.Y + 3.0, TagWidth, Tile.Bounds.Height - StatRowHeight - 5.0 },
                         Style.empty() ? "FX" : Style, HasEffect ? kColorMedium : kColorAccent, 9, true, true);
 
-                // Every card permanently carries two compact stat rows. HP
-                // and DPS come from the published stat block. Attack/cast rate
-                // comes directly from the live game definitions (60 divided
-                // by the stored frame interval), rather than being guessed.
+                // Preserve the raw per-hit damage and show derived/published
+                // DPS separately. Attack/cast rate comes directly from the
+                // live game definitions (60 divided by the stored frame
+                // interval), rather than being guessed.
                 const double StatsY = Tile.Bounds.Y + Tile.Bounds.Height - StatRowHeight + 3.0;
                 const double CellWidth = (Tile.Bounds.Width - 10.0) * 0.5;
                 constexpr double StatIconSize = 11.0;
@@ -3571,21 +3603,22 @@ namespace
                 const double LeftX = Tile.Bounds.X + 5.0;
                 const double RightX = LeftX + CellWidth;
                 DrawStatCell(LeftX, StatsY, "hp", "HP " + CompactStatValue(Stats ? Stats->Hp : std::string{}), kColorWhite);
-                DrawStatCell(RightX, StatsY, "damage", "DPS " + CompactStatValue(EffectiveDpsText(Stats)), kColorWhite);
+                DrawStatCell(RightX, StatsY, "damage", "DMG " + CompactStatValue(Stats ? Stats->AttackDamage : std::string{}), kColorWhite);
                 DrawStatCell(LeftX, StatsY + 15.0, "attack_speed", CompactRate(Stats), 0xD6EAFF);
+                DrawStatCell(RightX, StatsY + 15.0, "damage", "DPS " + CompactStatValue(EffectiveDpsText(Stats)), 0xFFF0B5);
                 if (Stats && !Stats->Heal.empty())
                 {
-                    NativeHealingIcon(DeviceContext, { RightX, StatsY + 16.0, StatIconSize, StatIconSize });
-                    NativeTextInRect(DeviceContext, { RightX + 13.0, StatsY + 14.0, CellWidth - 14.0, 15.0 },
-                        CompactStatValue(Stats->Heal), 0xB9FFD0, 10, false, true);
+                    NativeHealingIcon(DeviceContext, { LeftX, StatsY + 31.0, StatIconSize, StatIconSize });
+                    NativeTextInRect(DeviceContext, { LeftX + 13.0, StatsY + 29.0, Tile.Bounds.Width - 23.0, 15.0 },
+                        "HEAL " + CompactStatValue(Stats->Heal), 0xB9FFD0, 10, false, true);
                 }
             }
 
             const int WavePageCount = (std::max)(1, static_cast<int>((Data.WaveNumbers.size() + Layout.WaveColumns - 1) /
                 (std::max)(1, Layout.WaveColumns)));
             const int WavePage = (std::clamp)(g_WavePage, 0, WavePageCount - 1);
-            NativeTextInRect(DeviceContext, { Layout.Timeline.X + 33.0, Layout.Timeline.Y + 28.0,
-                Layout.Timeline.Width - 66.0, 25.0 }, "Page " + std::to_string(WavePage + 1) + "/" +
+            NativeTextInRect(DeviceContext, { Layout.Timeline.X + Layout.Timeline.Width - 125.0, Layout.Timeline.Y + 1.0,
+                90.0, 25.0 }, "Page " + std::to_string(WavePage + 1) + "/" +
                 std::to_string(WavePageCount), kColorMuted, 13, true);
 
             for (int Column = 0; Column < Layout.WaveColumns; ++Column)
@@ -3602,8 +3635,8 @@ namespace
                 const std::string WaveName = Data.WaveNumbers[static_cast<size_t>(WaveIndex)] == -1 ? "ENDLESS" :
                     "WAVE " + std::to_string(Data.WaveNumbers[static_cast<size_t>(WaveIndex)]);
                 NativeTextInRect(DeviceContext, { FirstCard->Bounds.X, Layout.Timeline.Y + 34.0,
-                    FirstCard->Bounds.Width, 27.0 },
-                    WaveName, kColorWhite, 14, true, true);
+                    FirstCard->Bounds.Width, 17.0 },
+                    WaveName, kColorWhite, 13, true, true);
                 if (Template)
                 {
                     const auto WeekField = std::find_if(Layout.WeekFields.begin(), Layout.WeekFields.end(),
@@ -3664,7 +3697,7 @@ namespace
         NativeTextInRect(DeviceContext, { Panel.X + 18.0, Panel.Y + Panel.Height - 48.0,
             Panel.Width - 36.0, 22.0 }, Shorten(g_Status, 180), kColorAccent, 14);
         NativeTextInRect(DeviceContext, { Panel.X + 18.0, Panel.Y + Panel.Height - 25.0,
-            Panel.Width - 36.0, 17.0 }, "Cards: heart HP | sword DPS | speed attacks/s (casts/s for pure casters) | green cross heal. Save updates normal waves; Endless is unchanged.",
+            Panel.Width - 36.0, 17.0 }, "Cards: heart HP | sword DMG per hit | DPS total damage/s | speed attacks/s (casts/s for pure casters) | green cross heal. Endless is unchanged.",
             kColorMuted, 12);
 
         for (const NativeButtonControl& Control : Layout.Buttons)

@@ -19,6 +19,9 @@ jobs:
       - name: Validate palette, icons, and stat data
         shell: powershell
         run: .\tests\Validate-Assets.ps1
+      - name: Validate responsive layout
+        shell: powershell
+        run: .\tests\Validate-ResponsiveLayout.ps1
       - name: Build mod and setup executable
         shell: powershell
         run: .\build-release.ps1

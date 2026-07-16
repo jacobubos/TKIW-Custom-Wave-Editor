@@ -59,7 +59,7 @@ Copy/Paste contains only the selected level's presets and wave weeks. It does no
 - Editable enemy counts and wave weeks
 - Released, map, boss, Endless, and unreleased palette filters
 - Localized in-game enemy names where available
-- Always-visible HP, DPS, attack-speed, healing, and role information where available
+- Always-visible HP, raw damage per hit, DPS, attack-speed, healing, and role information where available
 - Resolution- and DPI-safe native layout with smooth cached rendering while dragging
 - Per-level clipboard sharing
 - Live campaign wave reload without restarting the application
