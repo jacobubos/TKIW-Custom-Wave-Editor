@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build mod and setup executable
+        shell: powershell
+        run: .\build-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TKIW-Custom-Wave-Editor
+          path: |
+            dist/TKIW-Custom-Wave-Editor-Setup.exe
+            dist/SHA256SUMS.txt
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/TKIW-Custom-Wave-Editor-Setup.exe
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+
