@@ -24,6 +24,7 @@ jobs:
           name: TKIW-Custom-Wave-Editor
           path: |
             dist/TKIW-Custom-Wave-Editor-Setup.exe
+            dist/TKIW-Custom-Wave-Editor-Manual-Install.zip
             dist/TKIW-Custom-Wave-Editor-Source.zip
             dist/SHA256SUMS.txt
       - name: Publish tagged release
@@ -32,6 +33,7 @@ jobs:
         with:
           files: |
             dist/TKIW-Custom-Wave-Editor-Setup.exe
+            dist/TKIW-Custom-Wave-Editor-Manual-Install.zip
             dist/TKIW-Custom-Wave-Editor-Source.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true

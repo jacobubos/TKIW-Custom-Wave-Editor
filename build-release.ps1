@@ -9,6 +9,7 @@ $payload = Join-Path $build 'payload'
 $dist = Join-Path $root 'dist'
 $setup = Join-Path $dist 'TKIW-Custom-Wave-Editor-Setup.exe'
 $sourceZip = Join-Path $dist 'TKIW-Custom-Wave-Editor-Source.zip'
+$manualZip = Join-Path $dist 'TKIW-Custom-Wave-Editor-Manual-Install.zip'
 
 function Download-VerifiedFile {
     param(
@@ -65,12 +66,22 @@ Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY_NOTICES.md') -Destination (
 Copy-Item -LiteralPath (Join-Path $root 'third-party\Aurie-LICENSE.txt') -Destination (Join-Path $payload 'licenses\Aurie-AGPL-3.0.txt')
 Copy-Item -LiteralPath (Join-Path $root 'third-party\YYToolkit-LICENSE.txt') -Destination (Join-Path $payload 'licenses\YYToolkit-AGPL-3.0.txt')
 
+$manualPackage = Join-Path $build 'manual-package'
+$manualMods = Join-Path $manualPackage 'mods\aurie'
+New-Item -ItemType Directory -Path $manualMods | Out-Null
+Copy-Item -LiteralPath (Join-Path $dependencies '00_YYToolkit.dll') -Destination $manualMods
+Copy-Item -LiteralPath $builtDll -Destination (Join-Path $manualMods '10_CustomWaveEditor.dll')
+Copy-Item -LiteralPath (Join-Path $root 'assets') -Destination (Join-Path $manualMods 'CustomWaveEditorAssets') -Recurse
+Copy-Item -LiteralPath (Join-Path $payload 'licenses') -Destination (Join-Path $manualMods 'CustomWaveEditorLicenses') -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'MANUAL_INSTALL.txt') -Destination $manualPackage
+Compress-Archive -Path (Join-Path $manualPackage '*') -DestinationPath $manualZip -CompressionLevel Optimal
+
 $sourcePackage = Join-Path $build 'source-package'
 New-Item -ItemType Directory -Path $sourcePackage | Out-Null
 $sourceItems = @(
     '.github', 'assets', 'docs', 'include', 'installer', 'src', 'third-party',
     '.gitignore', 'build-release.ps1', 'CustomWaveEditor.vcxproj',
-    'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md'
+    'LICENSE', 'MANUAL_INSTALL.txt', 'README.md', 'THIRD_PARTY_NOTICES.md'
 )
 foreach ($relativePath in $sourceItems) {
     $sourcePath = Join-Path $root $relativePath
@@ -103,11 +114,12 @@ if (-not $csc) { throw 'The C# compiler was not found.' }
     "/out:$setup" (Join-Path $root 'installer\Installer.cs')
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed with exit code $LASTEXITCODE." }
 
-$hashLines = foreach ($releaseFile in @($setup, $sourceZip)) {
+$hashLines = foreach ($releaseFile in @($setup, $manualZip, $sourceZip)) {
     $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $releaseFile
     "$($hash.Hash)  $([IO.Path]::GetFileName($releaseFile))"
 }
 $hashLines | Set-Content -LiteralPath (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
 Write-Host "Built $setup"
+Write-Host "Built $manualZip"
 Write-Host "Built $sourceZip"
 Write-Host ($hashLines -join [Environment]::NewLine)

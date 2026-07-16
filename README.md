@@ -25,6 +25,15 @@ The installer does not modify save files or wave CSV files. The editor creates b
 
 Every release also provides `TKIW-Custom-Wave-Editor-Source.zip` for people who prefer to inspect or build the Visual Studio source project instead of running the installer.
 
+### Manual installation without the setup executable
+
+1. Install [official Aurie 2.0.2](https://github.com/AurieFramework/Aurie/releases/tag/v2.0.2) for your own copy of the game.
+2. Download `TKIW-Custom-Wave-Editor-Manual-Install.zip` from the release.
+3. Close the game and extract the ZIP into the main `The King is Watching` folder.
+4. Confirm that `mods\aurie\10_CustomWaveEditor.dll` and `mods\aurie\CustomWaveEditorAssets` exist, then start the game through Steam.
+
+This manual package contains the mod, its assets, the official pinned YYToolkit DLL, license notices, and a plain-text guide. It does not contain or run the automatic setup program.
+
 ## Using the editor
 
 - Open **Wave Editor** on the title screen.

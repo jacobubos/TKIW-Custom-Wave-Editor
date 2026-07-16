@@ -1,0 +1,28 @@
+THE KING IS WATCHING - CUSTOM WAVE EDITOR
+MANUAL INSTALLATION (NO MOD SETUP EXE)
+
+1. Close The King is Watching.
+2. Install the official Aurie 2.0.2 loader for your own game copy:
+   https://github.com/AurieFramework/Aurie/releases/tag/v2.0.2
+3. In Steam, right-click The King Is Watching and select:
+   Manage > Browse local files
+4. Extract this ZIP into that main game folder. Allow Windows to merge the
+   included "mods" folder.
+5. Check that these now exist:
+   mods\aurie\00_YYToolkit.dll
+   mods\aurie\10_CustomWaveEditor.dll
+   mods\aurie\CustomWaveEditorAssets\
+6. Start the game normally through Steam. The Wave Editor button appears on
+   the title screen.
+
+REMOVE ONLY THIS MOD
+
+Close the game, then delete:
+  mods\aurie\10_CustomWaveEditor.dll
+  mods\aurie\CustomWaveEditorAssets\
+  mods\aurie\CustomWaveEditorLicenses\
+
+Keep 00_YYToolkit.dll if another installed mod uses it.
+
+This package does not contain the game, data.win, save files, AuriePatcher,
+AurieCore, or the automatic mod setup executable.
