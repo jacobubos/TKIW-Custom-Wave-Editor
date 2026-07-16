@@ -82,6 +82,8 @@ unit_id,source_sprite,file,width,height,frames,selection
 "mecha_bat","spr_icon_unit_mecha_bat","icons/mecha_bat.png",12,12,1,"exact_icon"
 "mecha_mammoth","spr_icon_unit_mecha_mammoth","icons/mecha_mammoth.png",12,12,1,"exact_icon"
 "monkey_king","spr_icon_monkey_king","icons/monkey_king.png",12,12,1,"curated_alias"
+"monkey_king_clone","spr_icon_monkey_king","icons/monkey_king_clone.png",12,12,1,"shared_with_parent"
+"sharpshooter_spike_1","spr_icon_unit_sharpshooter_spike","icons/sharpshooter_spike_1.png",12,12,1,"exact_icon"
 "moonfaced","spr_icon_unit_moonfaced","icons/moonfaced.png",12,12,1,"exact_icon"
 "nature_elemental","spr_icon_unit_nature_elemental","icons/nature_elemental.png",12,12,1,"exact_icon"
 "necro_fencer","spr_icon_unit_necro_fencer","icons/necro_fencer.png",12,12,1,"exact_icon"

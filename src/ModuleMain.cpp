@@ -180,6 +180,7 @@ namespace
         UnitPageNext,
         WeekDecrease,
         WeekIncrease,
+        SetWeek,
         CopyChallenge,
         PasteChallenge,
         PaletteTierAll,
@@ -241,6 +242,12 @@ namespace
         int UnitCount = 0;
     };
 
+    struct NativeWeekField
+    {
+        Rect Bounds;
+        int WaveIndex = -1;
+    };
+
     struct NativeUnitChip
     {
         Rect Bounds;
@@ -258,6 +265,7 @@ namespace
         std::vector<NativeButtonControl> Buttons;
         std::vector<NativeUnitTile> UnitTiles;
         std::vector<NativeWaveCard> WaveCards;
+        std::vector<NativeWeekField> WeekFields;
         std::vector<NativeUnitChip> UnitChips;
         int WaveColumns = 0;
         int WaveStart = 0;
@@ -339,6 +347,13 @@ namespace
     std::mutex g_ActionMutex;
     std::vector<NativeAction> g_PendingActions;
     DragState g_Drag{};
+    struct WeekEditState
+    {
+        bool Active = false;
+        int WaveIndex = -1;
+        std::string Buffer;
+    };
+    WeekEditState g_WeekEdit{};
     std::map<std::string, std::unique_ptr<Gdiplus::Bitmap>> g_IconCache;
     std::map<std::string, std::unique_ptr<Gdiplus::Bitmap>> g_StatIconCache;
     std::mutex g_RuntimeLogMutex;
@@ -354,6 +369,36 @@ namespace
     HWND g_Launcher = nullptr;
     HWND g_Editor = nullptr;
     HWND g_GameWindow = nullptr;
+    HDC g_EditorBackBuffer = nullptr;
+    HBITMAP g_EditorBackBitmap = nullptr;
+    HGDIOBJ g_EditorBackPreviousBitmap = nullptr;
+    int g_EditorBackWidth = 0;
+    int g_EditorBackHeight = 0;
+
+    class ScopedPerMonitorDpi
+    {
+    public:
+        ScopedPerMonitorDpi()
+        {
+            // Aurie callbacks can run under a DPI-virtualized thread context
+            // even though the GameMaker window itself is per-monitor aware.
+            // Pin every native-popup operation to PMv2 so GDI layout, mouse
+            // coordinates, and physical game-client pixels remain 1:1.
+            m_Previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
+
+        ~ScopedPerMonitorDpi()
+        {
+            if (m_Previous)
+                SetThreadDpiAwarenessContext(m_Previous);
+        }
+
+        ScopedPerMonitorDpi(const ScopedPerMonitorDpi&) = delete;
+        ScopedPerMonitorDpi& operator=(const ScopedPerMonitorDpi&) = delete;
+
+    private:
+        DPI_AWARENESS_CONTEXT m_Previous = nullptr;
+    };
 
     // YYToolkit's public FWCodeEvent alias has the argument order wrong in
     // the version shipped with this game. This is the real x64 callback ABI.
@@ -914,6 +959,36 @@ namespace
         return Parsed;
     }
 
+    std::optional<double> EffectiveDpsValue(const EnemyStats& Stats)
+    {
+        if (const auto Published = ParseDecimal(Stats.Dps))
+            return Published;
+        const auto Damage = ParseDecimal(Stats.AttackDamage);
+        const auto Rate = ParseDecimal(Stats.AttackRate);
+        if (!Damage || !Rate || *Damage <= 0.0 || *Rate <= 0.0)
+            return std::nullopt;
+        return *Damage * *Rate;
+    }
+
+    std::string EffectiveDpsText(const EnemyStats* Stats)
+    {
+        if (!Stats)
+            return "?";
+        if (!Stats->Dps.empty())
+            return Stats->Dps;
+        const auto Dps = EffectiveDpsValue(*Stats);
+        if (!Dps)
+            return "-";
+        char Buffer[32]{};
+        std::snprintf(Buffer, sizeof(Buffer), *Dps >= 100.0 ? "%.0f" : (*Dps >= 10.0 ? "%.1f" : "%.2f"), *Dps);
+        std::string Result = Buffer;
+        while (Result.size() > 1 && Result.back() == '0')
+            Result.pop_back();
+        if (!Result.empty() && Result.back() == '.')
+            Result.pop_back();
+        return Result;
+    }
+
     double Median(std::vector<double> Values)
     {
         if (Values.empty())
@@ -929,7 +1004,7 @@ namespace
         if (Found == g_EnemyStats.end())
             return -1.0;
         const double Hp = ParseDecimal(Found->second.Hp).value_or(0.0);
-        const double Dps = ParseDecimal(Found->second.Dps).value_or(0.0);
+        const double Dps = EffectiveDpsValue(Found->second).value_or(0.0);
         const double Heal = ParseDecimal(Found->second.Heal).value_or(0.0);
         if (Hp <= 0.0 && Dps <= 0.0 && Heal <= 0.0)
             return -1.0;
@@ -2229,6 +2304,29 @@ namespace
         return true;
     }
 
+    bool SetWaveWeek(BiomeData& Data, const int WaveIndex, const std::string& WeekText)
+    {
+        std::vector<std::string>* Template = FindTemplateForWave(Data, WaveIndex);
+        if (!Template || WaveIndex < 0 || WaveIndex >= static_cast<int>(Data.WaveNumbers.size()) ||
+            Data.WaveNumbers[static_cast<size_t>(WaveIndex)] == -1)
+            return false;
+
+        const std::string Trimmed = Trim(WeekText);
+        const std::optional<int> Parsed = ParseInteger(Trimmed);
+        if (!Parsed)
+        {
+            g_Status = "Enter a whole week number from 1 to 9999.";
+            return false;
+        }
+
+        EnsureColumns(*Template, 7);
+        (*Template)[2] = std::to_string((std::clamp)(*Parsed, 1, 9999));
+        Data.Dirty = true;
+        g_Status = "Wave " + std::to_string(Data.WaveNumbers[static_cast<size_t>(WaveIndex)]) +
+            " now arrives in week " + (*Template)[2] + ". Press Save to apply it.";
+        return true;
+    }
+
     void RestoreCurrentBiome(BiomeData& Data)
     {
         const fs::path Preset = PresetPath(Data.Key);
@@ -2498,6 +2596,9 @@ namespace
             break;
         case NativeActionType::WeekIncrease:
             ChangeWaveWeek(Data, Action.WaveIndex, 1);
+            break;
+        case NativeActionType::SetWeek:
+            SetWaveWeek(Data, Action.WaveIndex, Action.UnitId);
             break;
         case NativeActionType::PaletteTierAll:
             g_PaletteTier = kPaletteTierAll;
@@ -3217,6 +3318,8 @@ namespace
                     NativeActionType::WeekDecrease, "-", false, false, WaveIndex);
                 AddNativeButton(Layout.Buttons, CardX + CardWidth - 22.0, Layout.Timeline.Y + 47.0, 18.0, 17.0,
                     NativeActionType::WeekIncrease, "+", false, true, WaveIndex);
+                Layout.WeekFields.push_back({
+                    { CardX + 24.0, Layout.Timeline.Y + 47.0, (std::max)(20.0, CardWidth - 48.0), 17.0 }, WaveIndex });
             }
             for (size_t DifficultyIndex = 0; DifficultyIndex < Difficulties.size(); ++DifficultyIndex)
             {
@@ -3325,17 +3428,56 @@ namespace
 
         // A small timeline glyph makes the purpose obvious while retaining
         // the same wide-button silhouette as Play/Options/Authors/Quit.
-        const double IconLeft = 30.0;
+        const double Scale = (std::clamp)(Metrics.Height / 64.0, 0.75, 1.35);
+        const double IconLeft = 30.0 * Scale;
         const std::array<int, 3> LaneColors{ kColorEasy, kColorMedium, kColorHard };
         for (size_t Index = 0; Index < LaneColors.size(); ++Index)
         {
-            const double Y = 17.0 + static_cast<double>(Index) * 12.0;
-            NativeFill(DeviceContext, { IconLeft, Y + 3.0, 36.0, 3.0 }, kMenuBrownOuter);
-            NativeFill(DeviceContext, { IconLeft + 4.0 + static_cast<double>(Index) * 6.0, Y, 9.0, 9.0 }, LaneColors[Index]);
-            NativeFill(DeviceContext, { IconLeft + 31.0, Y, 5.0, 9.0 }, 0xF3E4C2);
+            const double Y = (17.0 + static_cast<double>(Index) * 12.0) * Scale;
+            NativeFill(DeviceContext, { IconLeft, Y + 3.0 * Scale, 36.0 * Scale, 3.0 * Scale }, kMenuBrownOuter);
+            NativeFill(DeviceContext, { IconLeft + (4.0 + static_cast<double>(Index) * 6.0) * Scale, Y,
+                9.0 * Scale, 9.0 * Scale }, LaneColors[Index]);
+            NativeFill(DeviceContext, { IconLeft + 31.0 * Scale, Y, 5.0 * Scale, 9.0 * Scale }, 0xF3E4C2);
         }
-        NativeTextInRect(DeviceContext, { 78.0, 4.0, Metrics.Width - 96.0, Metrics.Height - 8.0 },
-            "WAVE EDITOR", 0xF6F2E8, 28, true, true);
+        NativeTextInRect(DeviceContext, { 78.0 * Scale, 4.0, Metrics.Width - 96.0 * Scale, Metrics.Height - 8.0 },
+            "WAVE EDITOR", 0xF6F2E8, static_cast<int>(28.0 * Scale), true, true);
+    }
+
+    void ReleaseEditorBackBuffer()
+    {
+        if (g_EditorBackBuffer && g_EditorBackPreviousBitmap)
+            SelectObject(g_EditorBackBuffer, g_EditorBackPreviousBitmap);
+        g_EditorBackPreviousBitmap = nullptr;
+        if (g_EditorBackBitmap)
+            DeleteObject(g_EditorBackBitmap);
+        g_EditorBackBitmap = nullptr;
+        if (g_EditorBackBuffer)
+            DeleteDC(g_EditorBackBuffer);
+        g_EditorBackBuffer = nullptr;
+        g_EditorBackWidth = 0;
+        g_EditorBackHeight = 0;
+    }
+
+    bool EnsureEditorBackBuffer(HDC ScreenContext, const int Width, const int Height)
+    {
+        if (g_EditorBackBuffer && g_EditorBackBitmap &&
+            g_EditorBackWidth == Width && g_EditorBackHeight == Height)
+            return true;
+
+        ReleaseEditorBackBuffer();
+        g_EditorBackBuffer = CreateCompatibleDC(ScreenContext);
+        if (!g_EditorBackBuffer)
+            return false;
+        g_EditorBackBitmap = CreateCompatibleBitmap(ScreenContext, Width, Height);
+        if (!g_EditorBackBitmap)
+        {
+            ReleaseEditorBackBuffer();
+            return false;
+        }
+        g_EditorBackPreviousBitmap = SelectObject(g_EditorBackBuffer, g_EditorBackBitmap);
+        g_EditorBackWidth = Width;
+        g_EditorBackHeight = Height;
+        return true;
     }
 
     void PaintNativeEditor(HDC DeviceContext, HWND Window)
@@ -3350,17 +3492,9 @@ namespace
         const int BufferWidth = (std::max)(1, static_cast<int>(Metrics.Width));
         const int BufferHeight = (std::max)(1, static_cast<int>(Metrics.Height));
         const HDC ScreenContext = DeviceContext;
-        const HDC BackBuffer = CreateCompatibleDC(ScreenContext);
-        if (!BackBuffer)
+        if (!EnsureEditorBackBuffer(ScreenContext, BufferWidth, BufferHeight))
             return;
-        const HBITMAP BackBitmap = CreateCompatibleBitmap(ScreenContext, BufferWidth, BufferHeight);
-        if (!BackBitmap)
-        {
-            DeleteDC(BackBuffer);
-            return;
-        }
-        const HGDIOBJ PreviousBitmap = SelectObject(BackBuffer, BackBitmap);
-        DeviceContext = BackBuffer;
+        DeviceContext = g_EditorBackBuffer;
 
         NativeFill(DeviceContext, { 0, 0, Metrics.Width, Metrics.Height }, kColorBackground);
         const NativeLayout Layout = BuildNativeLayout(Metrics);
@@ -3436,8 +3570,8 @@ namespace
                 };
                 const double LeftX = Tile.Bounds.X + 5.0;
                 const double RightX = LeftX + CellWidth;
-                DrawStatCell(LeftX, StatsY, "hp", CompactStatValue(Stats ? Stats->Hp : std::string{}), kColorWhite);
-                DrawStatCell(RightX, StatsY, "damage", CompactStatValue(Stats ? Stats->Dps : std::string{}), kColorWhite);
+                DrawStatCell(LeftX, StatsY, "hp", "HP " + CompactStatValue(Stats ? Stats->Hp : std::string{}), kColorWhite);
+                DrawStatCell(RightX, StatsY, "damage", "DPS " + CompactStatValue(EffectiveDpsText(Stats)), kColorWhite);
                 DrawStatCell(LeftX, StatsY + 15.0, "attack_speed", CompactRate(Stats), 0xD6EAFF);
                 if (Stats && !Stats->Heal.empty())
                 {
@@ -3472,9 +3606,18 @@ namespace
                     WaveName, kColorWhite, 14, true, true);
                 if (Template)
                 {
-                    NativeTextInRect(DeviceContext, { FirstCard->Bounds.X, Layout.Timeline.Y + 51.0,
-                        FirstCard->Bounds.Width, 15.0 },
-                        "week " + (Trim((*Template)[2]).empty() ? "-" : (*Template)[2]), kColorMuted, 11, true);
+                    const auto WeekField = std::find_if(Layout.WeekFields.begin(), Layout.WeekFields.end(),
+                        [WaveIndex](const NativeWeekField& Field) { return Field.WaveIndex == WaveIndex; });
+                    if (WeekField != Layout.WeekFields.end())
+                    {
+                        const bool Editing = g_WeekEdit.Active && g_WeekEdit.WaveIndex == WaveIndex;
+                        NativeFill(DeviceContext, WeekField->Bounds, Editing ? kColorDropTarget : kColorBackground);
+                        NativeFrame(DeviceContext, WeekField->Bounds, Editing ? kColorAccent : kColorButton);
+                        const std::string Value = Editing ? g_WeekEdit.Buffer :
+                            (Trim((*Template)[2]).empty() ? "-" : (*Template)[2]);
+                        NativeTextInRect(DeviceContext, WeekField->Bounds,
+                            "week " + Value + (Editing ? "|" : ""), Editing ? kColorWhite : kColorMuted, 11, true, Editing);
+                    }
                 }
             }
 
@@ -3537,10 +3680,7 @@ namespace
                 FriendlyUnitName(g_Drag.UnitId), kColorBackground, 13, false, true);
         }
 
-        BitBlt(ScreenContext, 0, 0, BufferWidth, BufferHeight, BackBuffer, 0, 0, SRCCOPY);
-        SelectObject(BackBuffer, PreviousBitmap);
-        DeleteObject(BackBitmap);
-        DeleteDC(BackBuffer);
+        BitBlt(ScreenContext, 0, 0, BufferWidth, BufferHeight, g_EditorBackBuffer, 0, 0, SRCCOPY);
     }
 
     bool GetGameClientScreenRect(HWND GameWindow, RECT& Bounds)
@@ -3605,8 +3745,8 @@ namespace
             // remains aligned at every resolution and DPI scale.
             const int ClientWidth = GameBounds.right - GameBounds.left;
             const int ClientHeight = GameBounds.bottom - GameBounds.top;
-            Width = (std::min)(380, (std::max)(220, ClientWidth - 40));
-            Height = 64;
+            Width = (std::clamp)(ClientWidth / 5, 220, 520);
+            Height = (std::clamp)(ClientHeight * 6 / 100, 48, 82);
             X = GameBounds.left + (ClientWidth - Width) / 2;
             Y = GameBounds.top + (ClientHeight * 69) / 100;
         }
@@ -3694,6 +3834,7 @@ namespace
 
     void ShowNativeEditor()
     {
+        const ScopedPerMonitorDpi DpiScope;
         if (!g_MainMenuVisible.load())
             return;
         if (!g_GameWindow || !IsWindow(g_GameWindow))
@@ -3741,8 +3882,27 @@ namespace
         InvalidateRect(g_Editor, nullptr, TRUE);
     }
 
+    void CancelWeekEdit(HWND Window)
+    {
+        g_WeekEdit = {};
+        if (Window && IsWindow(Window))
+            InvalidateRect(Window, nullptr, FALSE);
+    }
+
+    void CommitWeekEdit(HWND Window)
+    {
+        if (!g_WeekEdit.Active)
+            return;
+        if (!g_WeekEdit.Buffer.empty())
+            QueueNativeAction({ NativeActionType::SetWeek, g_WeekEdit.WaveIndex, -1, -1, g_WeekEdit.Buffer });
+        else
+            g_Status = "Week was not changed: enter a number from 1 to 9999.";
+        CancelWeekEdit(Window);
+    }
+
     LRESULT CALLBACK NativeWindowProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
     {
+        const ScopedPerMonitorDpi DpiScope;
         if (Message == WM_NCCREATE)
         {
             const auto* Create = reinterpret_cast<const CREATESTRUCTW*>(LParam);
@@ -3751,6 +3911,22 @@ namespace
         }
 
         const LONG_PTR Kind = GetWindowLongPtrW(Window, GWLP_USERDATA);
+        if (Message == WM_SIZE && Kind == kEditorWindow)
+        {
+            ReleaseEditorBackBuffer();
+            InvalidateRect(Window, nullptr, FALSE);
+            return 0;
+        }
+        if (Message == WM_DPICHANGED && (Kind == kEditorWindow || Kind == kLauncherWindow))
+        {
+            if (Kind == kEditorWindow)
+                ReleaseEditorBackBuffer();
+            RECT GameBounds{};
+            if (g_GameWindow && GetGameClientScreenRect(g_GameWindow, GameBounds))
+                PositionNativeWindow(Window, GameBounds, Kind == kEditorWindow);
+            InvalidateRect(Window, nullptr, FALSE);
+            return 0;
+        }
         if (Message == WM_ERASEBKGND && Kind == kEditorWindow)
             return 1;
         if (Message == WM_PAINT)
@@ -3772,6 +3948,26 @@ namespace
             const double MouseX = static_cast<double>(Pointer.x);
             const double MouseY = static_cast<double>(Pointer.y);
             const NativeLayout Layout = BuildNativeLayout(Metrics);
+            for (const NativeWeekField& Field : Layout.WeekFields)
+            {
+                if (!Field.Bounds.Contains(MouseX, MouseY))
+                    continue;
+                if (g_WeekEdit.Active && g_WeekEdit.WaveIndex != Field.WaveIndex)
+                    CommitWeekEdit(Window);
+                g_WeekEdit.Active = true;
+                g_WeekEdit.WaveIndex = Field.WaveIndex;
+                g_WeekEdit.Buffer.clear();
+                if (EnsureCurrentBiomeLoaded())
+                {
+                    if (std::vector<std::string>* Template = FindTemplateForWave(CurrentBiome(), Field.WaveIndex))
+                        g_WeekEdit.Buffer = Trim((*Template)[2]);
+                }
+                SetFocus(Window);
+                InvalidateRect(Window, nullptr, FALSE);
+                return 0;
+            }
+            if (g_WeekEdit.Active)
+                CommitWeekEdit(Window);
             for (const NativeUnitTile& Tile : Layout.UnitTiles)
             {
                 if (!Tile.Bounds.Contains(MouseX, MouseY))
@@ -3882,6 +4078,33 @@ namespace
             // Let DefWindowProc perform the standard cancel-mode handling.
         }
 
+        if (Message == WM_CHAR && Kind == kEditorWindow && g_WeekEdit.Active)
+        {
+            if (WParam >= L'0' && WParam <= L'9')
+            {
+                if (g_WeekEdit.Buffer.size() < 4)
+                    g_WeekEdit.Buffer.push_back(static_cast<char>(WParam));
+                InvalidateRect(Window, nullptr, FALSE);
+                return 0;
+            }
+            if (WParam == L'\b')
+            {
+                if (!g_WeekEdit.Buffer.empty())
+                    g_WeekEdit.Buffer.pop_back();
+                InvalidateRect(Window, nullptr, FALSE);
+                return 0;
+            }
+            if (WParam == L'\r')
+            {
+                CommitWeekEdit(Window);
+                return 0;
+            }
+        }
+        if (Message == WM_KEYDOWN && Kind == kEditorWindow && WParam == VK_ESCAPE && g_WeekEdit.Active)
+        {
+            CancelWeekEdit(Window);
+            return 0;
+        }
         if (Message == WM_KEYDOWN && Kind == kEditorWindow && WParam == VK_ESCAPE)
         {
             QueueNativeAction({ NativeActionType::Close });
@@ -3896,9 +4119,11 @@ namespace
         {
             if (Window == g_Editor)
             {
+                ReleaseEditorBackBuffer();
                 g_Editor = nullptr;
                 g_OverlayOpen.store(false);
                 g_Drag = {};
+                g_WeekEdit = {};
             }
             if (Window == g_Launcher)
                 g_Launcher = nullptr;
@@ -3909,6 +4134,7 @@ namespace
 
     void UpdateNativeWindows()
     {
+        const ScopedPerMonitorDpi DpiScope;
         static DWORD LastUpdate = 0;
         static RECT LastGameBounds{};
         static bool HasLastGameBounds = false;

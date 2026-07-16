@@ -16,9 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+      - name: Validate palette, icons, and stat data
+        shell: powershell
+        run: .\tests\Validate-Assets.ps1
       - name: Build mod and setup executable
         shell: powershell
         run: .\build-release.ps1
+      - name: Test release package
+        shell: powershell
+        run: .\tests\Test-ReleasePackage.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: TKIW-Custom-Wave-Editor

@@ -74,6 +74,11 @@ graveyard,boss_witch_4
 graveyard,vampire_lord_stage_1
 graveyard,reaper
 graveyard,grave_bearer
+# Additional enemies directly referenced by the shipped Graveyard presets.
+graveyard,goblin_crossbowman
+graveyard,slime_sand_small
+graveyard,slime_sand_big
+graveyard,sunfaced
 volcano,phoenix_boss
 volcano,boss_masked_minion_1
 volcano,boss_masked_minion_2
@@ -111,6 +116,8 @@ volcano,goblin_sharpshooter_boss
 volcano,fire_spider_boss
 volcano,masked_boss_stage_1
 volcano,magma_worm_boss
+# Additional enemy directly referenced by the shipped Volcano presets.
+volcano,magma_worm_small
 dark_realm,tentacle_mage
 dark_realm,tentacle_watcher
 dark_realm,tentacle_beetle_spawner
@@ -168,10 +175,58 @@ sands,fenec_roller
 sands,fenec_spearman
 sands,living_cactus
 sands,monkey_king
+sands,monkey_king_clone
 sands,nature_elemental
 sands,sand_worm
 sands,tiger_dragon
 sands,venomous_dragon
+# Shifting Sands also imports ordinary enemies from earlier lands in its
+# shipped presets. Map tabs intentionally overlap, so retain those imports.
+sands,bat_small
+sands,boar_junior
+sands,boss_masked_minion_1
+sands,boss_masked_minion_2
+sands,burning_skull
+sands,claything
+sands,corrupted_mushroom_warrior
+sands,cursed_ghost_1
+sands,cursed_ghost_2
+sands,cursed_ghost_3
+sands,ent
+sands,frank
+sands,goblin_crossbowman
+sands,goblin_giant
+sands,goblin_lizard
+sands,goblin_mage_fire
+sands,goblin_mage_healer
+sands,goblin_mage_lightning
+sands,goblin_shaman
+sands,goblin_swordsman
+sands,golden_dragon
+sands,golem
+sands,jason
+sands,jug
+sands,magma_spawn
+sands,magma_worm_small
+sands,necro_horseman
+sands,necro_soldier
+sands,poison_snake
+sands,sand_golem
+sands,scarling_fire_shooter
+sands,scarling_mage_tentacle
+sands,scarling_mage_toxic
+sands,scarling_mortar
+sands,scarling_shieldman
+sands,scarling_toad_rider
+sands,sea_fish_rowdy
+sands,sea_fish_thug
+sands,slime_sand_big
+sands,slime_sand_small
+sands,sludge_golem
+sands,toothy
+sands,vampire_swordsman
+sands,zombie_1
+sands,zombie_2
 # Shifting Sands can pull every earlier boss except Kraken through its rifts,
 # in addition to its four unique bosses.
 sands,goblin_boss
@@ -239,3 +294,4 @@ boss,iron_head
 boss,monkey_king
 boss,dragoness_boss
 boss,forest_lord_boss_stage_1
+boss,ogre_boss

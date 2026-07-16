@@ -39,7 +39,7 @@ This manual package contains the mod, its assets, the official pinned YYToolkit 
 - Open **Wave Editor** on the title screen.
 - Pick a campaign level.
 - Drag enemies into the available Easy, Medium, and Hard wave cards.
-- Use `+` and `-` to adjust counts and the week controls above each wave.
+- Use `+` and `-` to adjust counts. Click the visible `week N` field, type a week from 1 to 9999, and press Enter; the small `-`/`+` buttons remain available for quick changes.
 - Press **Save** to apply the selected level.
 - **Restore Defaults** restores the editor's original backup for that level.
 
@@ -59,7 +59,8 @@ Copy/Paste contains only the selected level's presets and wave weeks. It does no
 - Editable enemy counts and wave weeks
 - Released, map, boss, Endless, and unreleased palette filters
 - Localized in-game enemy names where available
-- Always-visible HP, damage, attack-speed, healing, and role information where available
+- Always-visible HP, DPS, attack-speed, healing, and role information where available
+- Resolution- and DPI-safe native layout with smooth cached rendering while dragging
 - Per-level clipboard sharing
 - Live campaign wave reload without restarting the application
 - Automatic backups and restore-to-default support
@@ -79,6 +80,8 @@ Run:
 ```
 
 The build downloads the pinned official Aurie and YYToolkit release binaries, verifies their SHA-256 hashes, compiles the x64 mod, and creates the setup executable and minimal manual-install ZIP under `dist`.
+
+Asset validation runs in GitHub Actions before every build. It checks the overlapping map groups, boss-only classification, complete icon/stat coverage, and safe DPS fallbacks. The release package is also exercised against a disposable game-folder copy before publication.
 
 ## Dependencies and attribution
 
