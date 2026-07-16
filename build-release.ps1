@@ -8,7 +8,6 @@ $dependencies = Join-Path $build 'dependencies'
 $payload = Join-Path $build 'payload'
 $dist = Join-Path $root 'dist'
 $setup = Join-Path $dist 'TKIW-Custom-Wave-Editor-Setup.exe'
-$sourceZip = Join-Path $dist 'TKIW-Custom-Wave-Editor-Source.zip'
 $manualZip = Join-Path $dist 'TKIW-Custom-Wave-Editor-Manual-Install.zip'
 
 function Download-VerifiedFile {
@@ -76,26 +75,6 @@ Copy-Item -LiteralPath (Join-Path $payload 'licenses') -Destination (Join-Path $
 Copy-Item -LiteralPath (Join-Path $root 'MANUAL_INSTALL.txt') -Destination $manualPackage
 Compress-Archive -Path (Join-Path $manualPackage '*') -DestinationPath $manualZip -CompressionLevel Optimal
 
-$sourcePackage = Join-Path $build 'source-package'
-New-Item -ItemType Directory -Path $sourcePackage | Out-Null
-$sourceItems = @(
-    '.github', 'assets', 'docs', 'include', 'installer', 'src', 'third-party',
-    '.gitignore', 'build-release.ps1', 'CustomWaveEditor.vcxproj',
-    'LICENSE', 'MANUAL_INSTALL.txt', 'README.md', 'THIRD_PARTY_NOTICES.md'
-)
-foreach ($relativePath in $sourceItems) {
-    $sourcePath = Join-Path $root $relativePath
-    if (-not (Test-Path -LiteralPath $sourcePath)) { continue }
-    $destinationPath = Join-Path $sourcePackage $relativePath
-    if (Test-Path -LiteralPath $sourcePath -PathType Container) {
-        Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Recurse
-    } else {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destinationPath) | Out-Null
-        Copy-Item -LiteralPath $sourcePath -Destination $destinationPath
-    }
-}
-Compress-Archive -Path (Join-Path $sourcePackage '*') -DestinationPath $sourceZip -CompressionLevel Optimal
-
 $payloadZip = Join-Path $build 'payload.zip'
 Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $payloadZip -CompressionLevel Optimal
 
@@ -114,12 +93,11 @@ if (-not $csc) { throw 'The C# compiler was not found.' }
     "/out:$setup" (Join-Path $root 'installer\Installer.cs')
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed with exit code $LASTEXITCODE." }
 
-$hashLines = foreach ($releaseFile in @($setup, $manualZip, $sourceZip)) {
+$hashLines = foreach ($releaseFile in @($setup, $manualZip)) {
     $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $releaseFile
     "$($hash.Hash)  $([IO.Path]::GetFileName($releaseFile))"
 }
 $hashLines | Set-Content -LiteralPath (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
 Write-Host "Built $setup"
 Write-Host "Built $manualZip"
-Write-Host "Built $sourceZip"
 Write-Host ($hashLines -join [Environment]::NewLine)

@@ -23,7 +23,7 @@ The installer does not modify save files or wave CSV files. The editor creates b
 
 > The setup executable is not code-signed, so Windows SmartScreen may show an unknown-publisher warning. The complete installer and mod source are in this repository, and release hashes are published beside every build.
 
-Every release also provides `TKIW-Custom-Wave-Editor-Source.zip` for people who prefer to inspect or build the Visual Studio source project instead of running the installer.
+The full Visual Studio project is visible directly in this repository. GitHub also provides its standard source-code ZIP and tarball with every release.
 
 ### Manual installation without the setup executable
 
@@ -78,7 +78,7 @@ Run:
 .\build-release.ps1
 ```
 
-The build downloads the pinned official Aurie and YYToolkit release binaries, verifies their SHA-256 hashes, compiles the x64 mod, and creates both the setup executable and source-project ZIP under `dist`.
+The build downloads the pinned official Aurie and YYToolkit release binaries, verifies their SHA-256 hashes, compiles the x64 mod, and creates the setup executable and minimal manual-install ZIP under `dist`.
 
 ## Dependencies and attribution
 
